@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -108,10 +109,13 @@ def publish_with_cli(root: Path, month: str, state: dict, dry_run: bool = False)
         raise FileNotFoundError(f"report not found: {report}")
     doc = state.get("documents", {}).get(month, {}).get("doc")
     rel = "@" + report.resolve().relative_to(root.resolve()).as_posix()
+    cli = shutil.which("lark-cli.cmd") or shutil.which("lark-cli")
+    if not cli:
+        raise FileNotFoundError("lark-cli not found")
     if doc:
-        cmd = ["lark-cli", "docs", "+update", "--api-version", "v2", "--doc", doc, "--command", "overwrite", "--doc-format", "markdown", "--content", rel, "--format", "json", "--as", "user"]
+        cmd = [cli, "docs", "+update", "--api-version", "v2", "--doc", doc, "--command", "overwrite", "--doc-format", "markdown", "--content", rel, "--format", "json", "--as", "user"]
     else:
-        cmd = ["lark-cli", "docs", "+create", "--api-version", "v2", "--doc-format", "markdown", "--content", rel, "--parent-position", "my_library", "--format", "json", "--as", "user"]
+        cmd = [cli, "docs", "+create", "--api-version", "v2", "--doc-format", "markdown", "--content", rel, "--parent-position", "my_library", "--format", "json", "--as", "user"]
     if dry_run:
         return {"dry_run": True, "command": subprocess.list2cmdline(cmd)}
     result = subprocess.run(cmd, cwd=root, capture_output=True, text=True, encoding="utf-8", errors="replace")

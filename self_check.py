@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
@@ -9,6 +10,7 @@ os.environ["LLM_MODE"] = "mock"
 os.environ["LARK_ENABLE_REPLIES"] = "false"
 
 from app import app  # noqa: E402
+from lark import publish_with_cli  # noqa: E402
 
 
 def main() -> None:
@@ -37,6 +39,8 @@ def main() -> None:
         assert "当前任务：无" in done_list and "T0001 飞书日报 Bot（completed）" in done_list
         daily = client.post("/daily/generate", json={}).json()
         assert daily["ok"] and "今日完成" in daily["draft"]
+        command = publish_with_cli(Path(tmp), daily["date"][:7], client.get("/state").json(), dry_run=True)["command"]
+        assert "lark-cli.cmd" in command or "lark-cli" in command
     print("self-check passed")
 
 
