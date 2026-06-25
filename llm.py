@@ -6,7 +6,7 @@ import re
 import httpx
 
 from config import Settings
-from prompts import DAILY_PROMPT, INTENT_PROMPT, SUMMARY_PROMPT
+from prompts import DAILY_PROMPT, DRAFT_TEMPLATE, INTENT_PROMPT, SUMMARY_PROMPT, SUMMARY_TEMPLATE
 
 
 def extract_json(text: str) -> dict:
@@ -46,7 +46,7 @@ class LLMClient:
             content = response.json()["choices"][0]["message"]["content"]
         return extract_json(content)
 
-    def parse_intent(self, text: str) -> dict:
+    def parse_intent(self, text: str, task_list: str = "暂无任务。") -> dict:
         stripped = text.strip()
         if stripped.startswith(("新任务", "创建一个任务", "创建任务")):
             title = stripped
@@ -68,22 +68,35 @@ class LLMClient:
             return {"intent": "finish_task", "task_id": None, "task_title": None, "text": stripped}
         if stripped.startswith(("完成了", "已完成", "添加了", "补充", "记录")):
             return {"intent": "add_material", "task_id": None, "task_title": None, "text": stripped}
-        return self.complete_json(INTENT_PROMPT.format(text=stripped))
+        return self.complete_json(INTENT_PROMPT.format(user_text_input=stripped, task_list=task_list))
 
     def summarize_task(self, task: dict) -> str:
-        materials = []
+        text_blocks = []
+        file_blocks = []
         for material in task.get("materials", []):
             if material["type"] == "text":
-                materials.append(f"- {material['text']}")
+                text_blocks.append(f"- {material['text']}")
             else:
-                materials.append(f"- 文件：{material.get('title') or material.get('file_id')}")
+                file_blocks.append(f"- {material.get('title') or material.get('file_id')}")
         if self.settings.llm_mode == "mock":
-            return f"{task['title']}：已记录 {len(materials)} 条材料。"
-        data = self.complete_json(SUMMARY_PROMPT.format(title=task["title"], materials="\n".join(materials)))
+            return f"# 任务目标\n{task['title']}\n\n# 关键结果\n已记录 {len(text_blocks) + len(file_blocks)} 条材料。\n\n# 后续事项\n暂无。"
+        data = self.complete_json(
+            SUMMARY_PROMPT.format(
+                text_blocks="\n".join(text_blocks) or "暂无。",
+                file_blocks="\n".join(file_blocks) or "暂无。",
+                summary_template=SUMMARY_TEMPLATE,
+            )
+        )
         return data.get("summary", "").strip()
 
-    def draft_daily(self, context: str) -> str:
+    def draft_daily(self, finished_task_blocks: str, ongoing_task_blocks: str) -> str:
         if self.settings.llm_mode == "mock":
-            return "## 今日完成\n- 已记录今日任务材料\n\n## 关键产出\n- 日报草稿\n\n## 问题与风险\n- 暂无\n\n## 明日计划\n- 继续推进"
-        data = self.complete_json(DAILY_PROMPT.format(context=context))
+            return "# 今日完成\n- 已记录今日任务材料\n\n# 明日计划\n- 继续推进\n\n# 需要的相关支持\n- 暂无"
+        data = self.complete_json(
+            DAILY_PROMPT.format(
+                finished_task_blocks=finished_task_blocks,
+                ongoing_task_blocks=ongoing_task_blocks,
+                draft_template=DRAFT_TEMPLATE,
+            )
+        )
         return data.get("draft", "").strip()

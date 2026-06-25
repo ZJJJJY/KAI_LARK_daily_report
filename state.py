@@ -148,23 +148,30 @@ def date_prefix(value: str | None) -> str:
     return value[:10] if value else ""
 
 
-def render_daily_context(state: dict, day: str) -> str:
-    lines = [f"# {day} 日报上下文", ""]
-    tasks = [task for task in state["tasks"] if task_touched_on(task, day)]
+def render_task_list(state: dict) -> str:
+    tasks = state.get("tasks", [])
     if not tasks:
-        return "\n".join(lines + ["暂无任务材料。", ""])
-    for task in tasks:
-        lines += [f"## {task['id']} {task['title']}", f"- 状态：{task['status']}"]
-        if task.get("summary"):
-            lines += ["", "### 小结", task["summary"]]
-        lines += ["", "### 材料"]
-        for material in task.get("materials", []):
-            if material["type"] == "text":
-                lines.append(f"- [{material['created_at']}] {material['text']}")
-            else:
-                lines.append(f"- [{material['created_at']}] 文件：{material.get('title') or material.get('file_id')}")
-        lines.append("")
+        return "暂无任务。"
+    return "\n".join(f"- {task['id']} {task['title']}（{task['status']}）" for task in tasks)
+
+
+def render_task_block(task: dict) -> str:
+    lines = [f"- {task['id']} {task['title']}（{task['status']}）"]
+    if task.get("summary"):
+        lines.append(f"  小结：{task['summary']}")
+    for material in task.get("materials", []):
+        if material["type"] == "text":
+            lines.append(f"  文本：{material['text']}")
+        else:
+            lines.append(f"  文件：{material.get('title') or material.get('file_id')}")
     return "\n".join(lines)
+
+
+def render_daily_task_blocks(state: dict, day: str) -> tuple[str, str]:
+    tasks = [task for task in state["tasks"] if task_touched_on(task, day)]
+    finished = [render_task_block(task) for task in tasks if task.get("status") == "completed"]
+    ongoing = [render_task_block(task) for task in tasks if task.get("status") != "completed"]
+    return "\n\n".join(finished) or "暂无。", "\n\n".join(ongoing) or "暂无。"
 
 
 def safe_month(value: str) -> str:

@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException, Request
 from config import settings
 from lark import LarkClient, normalize_event, publish_with_cli, unwrap_event, verify_token
 from llm import LLMClient
-from state import Store, add_files, add_text, current_task, find_task, make_task, now, render_daily_context, today
+from state import Store, add_files, add_text, current_task, find_task, make_task, now, render_daily_task_blocks, render_task_list, today
 
 app = FastAPI(title="KAI Lark Daily Report")
 
@@ -30,7 +30,7 @@ def handle_payload(payload: dict) -> str:
         if event_id:
             state["processed_event_ids"] = (state["processed_event_ids"] + [event_id])[-500:]
 
-        intent = llm.parse_intent(text) if text else {"intent": "add_material", "text": ""}
+        intent = llm.parse_intent(text, render_task_list(state)) if text else {"intent": "add_material", "text": ""}
         name = intent.get("intent", "unknown")
 
         if name == "new_task":
@@ -63,7 +63,7 @@ def handle_payload(payload: dict) -> str:
                 reply = f"已生成任务小结：{task['summary']}"
         elif name == "generate_daily":
             day = today()
-            draft = llm.draft_daily(render_daily_context(state, day))
+            draft = llm.draft_daily(*render_daily_task_blocks(state, day))
             state.setdefault("daily_reports", {})[day] = {"draft": draft, "updated_at": now()}
             report_path = store.root / "reports" / f"{day[:7]}.md"
             report_path.write_text(f"# {day} 日报\n\n{draft}\n", encoding="utf-8")
@@ -71,7 +71,7 @@ def handle_payload(payload: dict) -> str:
         elif name == "publish":
             day = today()
             if day not in state.get("daily_reports", {}):
-                draft = llm.draft_daily(render_daily_context(state, day))
+                draft = llm.draft_daily(*render_daily_task_blocks(state, day))
                 state.setdefault("daily_reports", {})[day] = {"draft": draft, "updated_at": now()}
                 (store.root / "reports" / f"{day[:7]}.md").write_text(f"# {day} 日报\n\n{draft}\n", encoding="utf-8")
             result = publish_with_cli(store.root, day[:7], state)
@@ -128,7 +128,7 @@ def daily_generate(payload: dict | None = None) -> dict:
     _, store, llm, _ = deps()
     day = (payload or {}).get("date") or today()
     with store.edit() as state:
-        draft = llm.draft_daily(render_daily_context(state, day))
+        draft = llm.draft_daily(*render_daily_task_blocks(state, day))
         state.setdefault("daily_reports", {})[day] = {"draft": draft, "updated_at": now()}
         path = store.root / "reports" / f"{day[:7]}.md"
         path.write_text(f"# {day} 日报\n\n{draft}\n", encoding="utf-8")
