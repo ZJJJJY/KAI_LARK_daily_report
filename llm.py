@@ -48,6 +48,8 @@ class LLMClient:
 
     def parse_intent(self, text: str, task_list: str = "暂无任务。") -> dict:
         stripped = text.strip()
+        if stripped in {"任务列表", "查看任务", "列出任务", "当前任务"}:
+            return {"intent": "list_tasks", "task_id": None, "task_title": None, "text": stripped}
         if stripped.startswith(("新任务", "创建一个任务", "创建任务")):
             title = stripped
             for sep in ["：", ":"]:

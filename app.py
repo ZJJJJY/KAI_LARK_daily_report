@@ -40,6 +40,10 @@ def handle_payload(payload: dict) -> str:
             if files:
                 add_files(task, files, message_id)
             reply = f"已创建任务：{task['title']}"
+        elif name == "list_tasks":
+            task = current_task(state)
+            current = f"{task['id']} {task['title']}" if task else "无"
+            reply = f"当前任务：{current}\n\n任务列表：\n{render_task_list(state)}"
         elif name == "switch_task":
             task = find_task(state, intent.get("task_id") or intent.get("task_title") or text)
             if not task:
