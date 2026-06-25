@@ -91,8 +91,25 @@ def find_task(state: dict, key: str | None) -> dict | None:
     for task in state["tasks"]:
         if task["id"] == key or task["title"] == key:
             return task
-    matches = [task for task in state["tasks"] if key in task["title"]]
-    return matches[0] if len(matches) == 1 else None
+    matches = [task for task in state["tasks"] if key in task["title"] or task["title"] in key]
+    if len(matches) == 1:
+        return matches[0]
+    scored = [(longest_common_substring(key, task["title"]), task) for task in state["tasks"]]
+    scored = sorted(scored, key=lambda item: item[0], reverse=True)
+    if scored and scored[0][0] >= 4 and (len(scored) == 1 or scored[0][0] > scored[1][0]):
+        return scored[0][1]
+    return None
+
+
+def longest_common_substring(a: str, b: str) -> int:
+    best = 0
+    for i in range(len(a)):
+        for j in range(i + 1, len(a) + 1):
+            if j - i <= best:
+                continue
+            if a[i:j] in b:
+                best = j - i
+    return best
 
 
 def add_text(task: dict, text: str, message_id: str | None = None) -> None:
@@ -122,9 +139,13 @@ def first_line(text: str) -> str:
 
 
 def task_touched_on(task: dict, day: str) -> bool:
-    dates = [task.get("created_at", "")[:10], task.get("updated_at", "")[:10], task.get("completed_at", "")[:10]]
-    dates += [m.get("created_at", "")[:10] for m in task.get("materials", [])]
+    dates = [date_prefix(task.get("created_at")), date_prefix(task.get("updated_at")), date_prefix(task.get("completed_at"))]
+    dates += [date_prefix(m.get("created_at")) for m in task.get("materials", [])]
     return day in dates
+
+
+def date_prefix(value: str | None) -> str:
+    return value[:10] if value else ""
 
 
 def render_daily_context(state: dict, day: str) -> str:

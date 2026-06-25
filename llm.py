@@ -48,9 +48,17 @@ class LLMClient:
 
     def parse_intent(self, text: str) -> dict:
         stripped = text.strip()
-        if stripped.startswith("新任务"):
-            title = stripped.split("：", 1)[-1].split(":", 1)[-1].strip()
+        if stripped.startswith(("新任务", "创建一个任务", "创建任务")):
+            title = stripped
+            for sep in ["：", ":"]:
+                if sep in title:
+                    title = title.split(sep, 1)[1]
+                    break
+            title = title.replace("创建一个任务", "", 1).replace("创建任务", "", 1).replace("新任务", "", 1).strip(" ：:")
             return {"intent": "new_task", "task_id": None, "task_title": title, "text": stripped}
+        for prefix in ["切换到", "切到", "切换任务到", "切换任务"]:
+            if stripped.startswith(prefix):
+                return {"intent": "switch_task", "task_id": None, "task_title": stripped[len(prefix):].strip(" ：:"), "text": stripped}
         if "生成日报" in stripped or stripped in {"日报", "今天日报"}:
             return {"intent": "generate_daily", "task_id": None, "task_title": None, "text": stripped}
         if "发布" in stripped:
@@ -58,7 +66,7 @@ class LLMClient:
         finish_words = ["这个任务完成", "任务完成", "总结一下", "总结这个任务", "收尾"]
         if any(word in stripped for word in finish_words):
             return {"intent": "finish_task", "task_id": None, "task_title": None, "text": stripped}
-        if stripped.startswith("完成了") or stripped.startswith("已完成"):
+        if stripped.startswith(("完成了", "已完成", "添加了", "补充", "记录")):
             return {"intent": "add_material", "task_id": None, "task_title": None, "text": stripped}
         return self.complete_json(INTENT_PROMPT.format(text=stripped))
 
