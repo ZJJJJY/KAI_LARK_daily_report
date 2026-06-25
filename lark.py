@@ -16,8 +16,9 @@ from state import safe_month
 def decrypt_lark_body(encrypt: str, encrypt_key: str) -> dict:
     key = hashlib.sha256(encrypt_key.encode("utf-8")).digest()
     raw = base64.b64decode(encrypt)
-    decryptor = Cipher(algorithms.AES(key), modes.CBC(key[:16])).decryptor()
-    padded = decryptor.update(raw) + decryptor.finalize()
+    iv = raw[:16]
+    decryptor = Cipher(algorithms.AES(key), modes.CBC(iv)).decryptor()
+    padded = decryptor.update(raw[16:]) + decryptor.finalize()
     pad = padded[-1]
     text = padded[:-pad].decode("utf-8")
     return json.loads(text)
